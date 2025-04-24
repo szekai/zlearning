@@ -1,0 +1,165 @@
+package speechrecognition
+
+import org.apache.commons.io.{FileUtils, FilenameUtils}
+import org.deeplearning4j.models.embeddings.loader.WordVectorSerializer
+import org.deeplearning4j.nn.conf.*
+import org.deeplearning4j.nn.conf.layers.{LSTM, RnnOutputLayer}
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
+import org.deeplearning4j.nn.weights.WeightInit
+import org.deeplearning4j.optimize.listeners.ScoreIterationListener
+import org.nd4j.evaluation.classification.Evaluation
+import org.nd4j.linalg.activations.Activation
+import org.nd4j.linalg.api.ndarray.INDArray
+import org.nd4j.linalg.factory.Nd4j
+import org.nd4j.linalg.indexing.NDArrayIndex
+import org.nd4j.linalg.learning.config.Adam
+import org.nd4j.linalg.lossfunctions.LossFunctions
+import zio.{System, *}
+
+import java.io.{File, IOException}
+import java.net.URL
+import java.nio.charset.StandardCharsets
+
+object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault {
+
+  val BATCH_SIZE = 64
+  val SIZE_OF_VECTOR_IN_GOOGLE_NEWS_MODEL = 300
+  val N_EPOCHS = 1
+  val MAX_NUMBER_OF_WORDS_TAKEN_FROM_REVIEW = 256
+  val SEED = 0
+
+  val IMDB_COMMENTS_URL = "http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
+  val GOOGLE_NEWS_VECTOR_PATH = "/Users/szekai/Downloads/GoogleNews-vectors-negative300.bin.gz"
+
+  val getIMDBDataPath: ZIO[Any, Throwable, String] = for {
+    tmpDirOpt <- System.property("java.io.tmpdir")
+    tmpDir <- ZIO.fromOption(tmpDirOpt).orElseFail(new Exception("Temporary directory not found"))
+  } yield FilenameUtils.concat(tmpDir, "dl4j_w2vSentiment/")
+
+  override def run: ZIO[Any, Throwable, Unit] = for {
+    imdbPath <- getIMDBDataPath
+
+//    _ <- downloadIMDBDatabase(imdbPath)
+
+    _ <- ZIO.succeed(Nd4j.getMemoryManager.setAutoGcWindow(10000))
+
+    net <- configureMultiLayerWithTwoOutputClasses()
+
+    wordVectors <- ZIO.attempt(WordVectorSerializer.loadStaticModel(new File(GOOGLE_NEWS_VECTOR_PATH)))
+//    cursorRef <- Ref.make(0)
+    train = new DataSetIteratorWord2Vec(imdbPath, wordVectors, BATCH_SIZE, MAX_NUMBER_OF_WORDS_TAKEN_FROM_REVIEW, true)
+    test = new DataSetIteratorWord2Vec(imdbPath, wordVectors, BATCH_SIZE, MAX_NUMBER_OF_WORDS_TAKEN_FROM_REVIEW, false)
+
+    _ <- performTraining(net, train, test)
+    _ <- printFirstPredictedPositiveReview(net, test, imdbPath)
+  } yield ()
+
+  private def printFirstPredictedPositiveReview(
+                                                 net: MultiLayerNetwork,
+                                                 test: DataSetIteratorWord2Vec,
+                                                 imdbPath: String
+                                               ): ZIO[Any, Throwable, Unit] = {
+    val reviewFile = new File(FilenameUtils.concat(imdbPath, "aclImdb/test/pos/0_10.txt"))
+    val zioDataSetService = new ZIODataSetService(test)
+    for {
+      reviewText <- ZIO.attempt(FileUtils.readFileToString(reviewFile, StandardCharsets.UTF_8))
+      features <- zioDataSetService.featuresFromString(reviewText, MAX_NUMBER_OF_WORDS_TAKEN_FROM_REVIEW)
+      output <- ZIO.succeed(net.output(features))
+      tsLength = output.size(2)
+      probs = output.get(NDArrayIndex.point(0), NDArrayIndex.all(), NDArrayIndex.point(tsLength - 1))
+      _ <- Console.printLine(
+        s"""
+           |-------------------------------
+           |First positive review:
+           |$reviewText
+           |
+           |Probabilities at last time step:
+           |p(positive): ${probs.getDouble(0L)}
+           |p(negative): ${probs.getDouble(1L)}
+           |-------------------------------
+           |""".stripMargin)
+    } yield ()
+  }
+
+  private def performTraining(
+                               net: MultiLayerNetwork,
+                               train: DataSetIteratorWord2Vec,
+                               test: DataSetIteratorWord2Vec
+                             ): ZIO[Any, Throwable, Unit] = {
+    for {
+      _ <- Console.printLine("Starting training")
+      _ <- ZIO.foreachDiscard(0 until N_EPOCHS) {
+        epoch =>
+          for {
+            _ <- ZIO.succeed(net.fit(train))
+            _ <- ZIO.succeed(train.reset())
+            _ <- Console.printLine(s"Epoch $epoch complete. Starting evaluation:")
+            eval <- ZIO.succeed {
+              val evaluation: Evaluation = net.evaluate(test)
+              evaluation
+            }
+            _ <- Console.printLine(eval.stats())
+          } yield ()
+      }
+    } yield ()
+  }
+
+  private def configureMultiLayerWithTwoOutputClasses(): ZIO[Any, Throwable, MultiLayerNetwork] = {
+    val conf = new NeuralNetConfiguration.Builder()
+      .seed(SEED)
+      .updater(new Adam(5e-3))
+      .l2(1e-5)
+      .weightInit(WeightInit.XAVIER)
+      .gradientNormalization(GradientNormalization.ClipElementWiseAbsoluteValue).gradientNormalizationThreshold(1.0)
+      .list()
+      .layer(0, new LSTM.Builder().nIn(SIZE_OF_VECTOR_IN_GOOGLE_NEWS_MODEL).nOut(256).activation(Activation.TANH).build())
+      .layer(1, new RnnOutputLayer.Builder().activation(Activation.SOFTMAX).lossFunction(LossFunctions.LossFunction.MCXENT).nIn(256).nOut(2).build())
+      .build()
+
+    val net = new MultiLayerNetwork(conf)
+    net.init()
+    net.setListeners(new ScoreIterationListener(1))
+    ZIO.succeed(net)
+  }
+
+//  private def downloadIMDBDatabase(imdbPath: String): ZIO[Any, IOException, Unit] = {
+//    val baseDir = ZPath(imdbPath)
+//    val archiveFile = baseDir / "aclImdb_v1.tar.gz"
+//    val extractedDir = baseDir / "aclImdb"
+//
+//    def createDirIfMissing: ZIO[Any, IOException, Unit] =
+//      Files.createDirectories(baseDir).catchSome {
+//        case _: java.nio.file.FileAlreadyExistsException => ZIO.unit
+//      }
+//
+//    def downloadFile(url: String, dest: ZPath): ZIO[Any, IOException, Unit] =
+//      ZIO.attemptBlockingIO {
+//        println(s"Downloading IMDB dataset from $url to $dest")
+//        Using.resources(
+//          new BufferedInputStream(new URL(url).openStream()),
+//          new FileOutputStream(dest.toFile.toString)
+//        ) { (in, out) =>
+//          val buffer = new Array
+//          Iterator
+//            .continually(in.read(buffer))
+//            .takeWhile(_ != -1)
+//            .foreach(read => out.write(buffer, 0, read))
+//        }
+//      }
+//
+//    def extractTarGz(archive: ZPath, targetDir: ZPath): ZIO[Any, IOException, Unit] =
+//      ZIO.attempt {
+//        // You can replace this with your actual extraction logic
+//        println(s"Extracting ${archive.toFile.getAbsolutePath} to ${targetDir.toFile.getAbsolutePath}")
+//        DataUtilities.extractTarGz(archive.toString, targetDir.toString)
+//      }.refineToOrDie[IOException]
+//
+//    for {
+//      _ <- createDirIfMissing
+//      archiveExists <- Files.exists(archiveFile)
+//      _ <- ZIO.when(!archiveExists)(downloadFile(IMDB_COMMENTS_URL, archiveFile))
+//      extractedExists <- Files.exists(extractedDir)
+//      _ <- ZIO.when(!extractedExists)(extractTarGz(archiveFile, baseDir))
+//    } yield ()
+//  }
+}
