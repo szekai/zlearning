@@ -14,10 +14,10 @@ import org.nd4j.linalg.factory.Nd4j
 import org.nd4j.linalg.indexing.NDArrayIndex
 import org.nd4j.linalg.learning.config.Adam
 import org.nd4j.linalg.lossfunctions.LossFunctions
+import speechrecognition.imdb.ImdbDataDownloader
 import zio.{System, *}
 
-import java.io.{File, IOException}
-import java.net.URL
+import java.io.File
 import java.nio.charset.StandardCharsets
 
 object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault {
@@ -29,6 +29,7 @@ object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault {
   val SEED = 0
 
   val IMDB_COMMENTS_URL = "http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
+  //download from https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit
   val GOOGLE_NEWS_VECTOR_PATH = "/Users/szekai/Downloads/GoogleNews-vectors-negative300.bin.gz"
 
   val getIMDBDataPath: ZIO[Any, Throwable, String] = for {
@@ -39,14 +40,13 @@ object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault {
   override def run: ZIO[Any, Throwable, Unit] = for {
     imdbPath <- getIMDBDataPath
 
-//    _ <- downloadIMDBDatabase(imdbPath)
+    _ <- ImdbDataDownloader.downloadIMDBDatabase(imdbPath)
 
     _ <- ZIO.succeed(Nd4j.getMemoryManager.setAutoGcWindow(10000))
 
     net <- configureMultiLayerWithTwoOutputClasses()
 
     wordVectors <- ZIO.attempt(WordVectorSerializer.loadStaticModel(new File(GOOGLE_NEWS_VECTOR_PATH)))
-//    cursorRef <- Ref.make(0)
     train = new DataSetIteratorWord2Vec(imdbPath, wordVectors, BATCH_SIZE, MAX_NUMBER_OF_WORDS_TAKEN_FROM_REVIEW, true)
     test = new DataSetIteratorWord2Vec(imdbPath, wordVectors, BATCH_SIZE, MAX_NUMBER_OF_WORDS_TAKEN_FROM_REVIEW, false)
 

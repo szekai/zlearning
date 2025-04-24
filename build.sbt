@@ -15,7 +15,10 @@ lazy val root = (project in file("."))
 lazy val zioDeps = libraryDependencies ++= Seq(
   "dev.zio" %% "zio" % "2.1.17",
   //      "io.github.karimagnusson" %% "zio-path" % "2.0.1",
-  "dev.zio" %% "zio-test" % "2.1.17" % Test
+  "dev.zio" %% "zio-test" % "2.1.17" % Test,
+  "dev.zio" %% "zio-streams" % "2.1.17",
+  "com.softwaremill.sttp.client3" %% "httpclient-backend-zio" % "3.5.2",
+  "org.apache.commons" % "commons-compress" % "1.27.1"
 )
 
 val sparkVersion = "3.5.5"
