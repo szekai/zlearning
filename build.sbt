@@ -9,14 +9,18 @@ lazy val root = (project in file("."))
     sparkDeps,
     dl4jDeps,
     cudaDeps,
-    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
+    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework"),
+    excludeDependencies += "org.scala-lang.modules" % "scala-collection-compat_2.13"
   )
 
 lazy val zioDeps = libraryDependencies ++= Seq(
   "dev.zio" %% "zio" % "2.1.17",
-  //      "io.github.karimagnusson" %% "zio-path" % "2.0.1",
+  "io.github.karimagnusson" %% "zio-path" % "2.0.1",
   "dev.zio" %% "zio-test" % "2.1.17" % Test,
   "dev.zio" %% "zio-streams" % "2.1.17",
+  "dev.zio" %% "zio-logging" % "2.5.0",
+  "dev.zio" %% "zio-logging-slf4j" % "2.5.0",
+  "dev.zio" %% "zio-http" % "3.2.0",
   "com.softwaremill.sttp.client3" %% "httpclient-backend-zio" % "3.5.2",
   "org.apache.commons" % "commons-compress" % "1.27.1"
 )

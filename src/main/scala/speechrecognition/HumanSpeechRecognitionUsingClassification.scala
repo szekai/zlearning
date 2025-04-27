@@ -121,45 +121,4 @@ object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault {
     net.setListeners(new ScoreIterationListener(1))
     ZIO.succeed(net)
   }
-
-//  private def downloadIMDBDatabase(imdbPath: String): ZIO[Any, IOException, Unit] = {
-//    val baseDir = ZPath(imdbPath)
-//    val archiveFile = baseDir / "aclImdb_v1.tar.gz"
-//    val extractedDir = baseDir / "aclImdb"
-//
-//    def createDirIfMissing: ZIO[Any, IOException, Unit] =
-//      Files.createDirectories(baseDir).catchSome {
-//        case _: java.nio.file.FileAlreadyExistsException => ZIO.unit
-//      }
-//
-//    def downloadFile(url: String, dest: ZPath): ZIO[Any, IOException, Unit] =
-//      ZIO.attemptBlockingIO {
-//        println(s"Downloading IMDB dataset from $url to $dest")
-//        Using.resources(
-//          new BufferedInputStream(new URL(url).openStream()),
-//          new FileOutputStream(dest.toFile.toString)
-//        ) { (in, out) =>
-//          val buffer = new Array
-//          Iterator
-//            .continually(in.read(buffer))
-//            .takeWhile(_ != -1)
-//            .foreach(read => out.write(buffer, 0, read))
-//        }
-//      }
-//
-//    def extractTarGz(archive: ZPath, targetDir: ZPath): ZIO[Any, IOException, Unit] =
-//      ZIO.attempt {
-//        // You can replace this with your actual extraction logic
-//        println(s"Extracting ${archive.toFile.getAbsolutePath} to ${targetDir.toFile.getAbsolutePath}")
-//        DataUtilities.extractTarGz(archive.toString, targetDir.toString)
-//      }.refineToOrDie[IOException]
-//
-//    for {
-//      _ <- createDirIfMissing
-//      archiveExists <- Files.exists(archiveFile)
-//      _ <- ZIO.when(!archiveExists)(downloadFile(IMDB_COMMENTS_URL, archiveFile))
-//      extractedExists <- Files.exists(extractedDir)
-//      _ <- ZIO.when(!extractedExists)(extractTarGz(archiveFile, baseDir))
-//    } yield ()
-//  }
 }
