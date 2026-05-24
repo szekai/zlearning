@@ -17,6 +17,7 @@ import org.deeplearning4j.text.tokenization.tokenizer.preprocessor.CommonPreproc
 import org.deeplearning4j.text.tokenization.tokenizerfactory.{DefaultTokenizerFactory, TokenizerFactory}
 
 import java.io.File
+import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.util
 
 object NaturalLanguageModelingDL extends ZIOAppDefault:
@@ -26,12 +27,15 @@ object NaturalLanguageModelingDL extends ZIOAppDefault:
 
   def run =
     val program = for
-      resourceUrl <- ZIO.attempt(getClass.getClassLoader.getResource("raw_textual_data"))
-        .flatMap(url =>
-          if url == null then failWithMessage("Resource 'raw_textual_data' not found on the classpath")
-          else ZIO.succeed(url)
+      inputStream <- ZIO.attempt(getClass.getClassLoader.getResourceAsStream("raw_textual_data"))
+        .flatMap(is =>
+          if is == null then failWithMessage("Resource 'raw_textual_data' not found on the classpath")
+          else ZIO.succeed(is)
         )
-      file <- ZIO.attempt(File(resourceUrl.toURI))
+      tmpFile <- ZIO.attempt(File.createTempFile("raw_textual_data", ".txt"))
+      _ <- ZIO.attempt(Files.copy(inputStream, tmpFile.toPath, StandardCopyOption.REPLACE_EXISTING))
+      _ <- ZIO.succeed(inputStream.close())
+      file = tmpFile
       vocabCache <- ZIO.attempt(new AbstractCache.Builder[VocabWord]().build())
       underlyingIterator <- ZIO.attempt(new BasicLineIterator(file))
       tokenizerFactory =
@@ -53,6 +57,7 @@ object NaturalLanguageModelingDL extends ZIOAppDefault:
       vectors <- buildModel(vocabCache, sequenceIterator, lookupTable)
       _ <- ZIO.attemptBlocking(vectors.fit())
       _ <- findSimilarities(vectors)
+      _ <- ZIO.attempt(tmpFile.delete())
     yield ()
 
     program.catchAll(e => printLineError(e.getMessage))
@@ -76,13 +81,13 @@ object NaturalLanguageModelingDL extends ZIOAppDefault:
                         ): ZIO[Any, Throwable, SequenceVectors[VocabWord]] =
     ZIO.attempt(
       SequenceVectors.Builder[VocabWord](VectorsConfiguration())
-        .minWordFrequency(5)
+        .minWordFrequency(2)
         .lookupTable(lookupTable)
         .iterate(sequenceIterator)
         .vocabCache(vocabCache)
-        .batchSize(250)
+        .batchSize(512)
         .iterations(1)
-        .epochs(1)
+        .epochs(3)
         .resetModel(false)
         .trainElementsRepresentation(true)
         .trainSequencesRepresentation(false)
@@ -93,7 +98,7 @@ object NaturalLanguageModelingDL extends ZIOAppDefault:
   private def buildWeightLookupTable(vocabCache: AbstractCache[VocabWord]): ZIO[Any, Throwable, WeightLookupTable[VocabWord]] =
     ZIO.attempt(
       InMemoryLookupTable.Builder[VocabWord]()
-        .vectorLength(150)
+        .vectorLength(300)
         .useAdaGrad(false)
         .cache(vocabCache)
         .build()

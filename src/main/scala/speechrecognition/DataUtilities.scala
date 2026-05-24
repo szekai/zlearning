@@ -1,7 +1,5 @@
 package speechrecognition
 
-import org.apache.commons.compress.archivers.tar.{TarArchiveEntry, TarArchiveInputStream}
-import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import org.apache.http.client.methods.HttpGet
 import org.apache.http.impl.client.HttpClientBuilder
 import zio.*
@@ -42,43 +40,7 @@ object DataUtilities:
         } yield downloaded
     }
 
-  def extractTarGz(inputPath: String, outputPath: String): ZIO[Any, IOException, Option[Unit]] = {
-    val outputDir = if outputPath.endsWith(File.separator) then outputPath else outputPath + File.separator
-    val bufferSize = 4096
-
-    ZIO.scoped {
-      ZIO.attemptBlockingIO {
-        val fis = new FileInputStream(inputPath)
-        val bis = new BufferedInputStream(fis)
-        val gzipIn = new GzipCompressorInputStream(bis)
-        val tarIn = new TarArchiveInputStream(gzipIn)
-
-        val buffer = Array.ofDim[Byte](bufferSize)
-
-        try {
-          Iterator
-            .continually(Option(tarIn.getNextEntry).map(_.asInstanceOf[TarArchiveEntry]))
-            .takeWhile(_.isDefined)
-            .flatten
-            .foreach { entry =>
-              val outFile = File(outputDir + entry.getName)
-              if entry.isDirectory then
-                outFile.mkdirs()
-              else {
-                val parent = outFile.getParentFile
-                if parent != null then parent.mkdirs()
-                val out = new BufferedOutputStream(new FileOutputStream(outFile), bufferSize)
-                try {
-                  Iterator
-                    .continually(tarIn.read(buffer))
-                    .takeWhile(_ != -1)
-                    .foreach(count => out.write(buffer, 0, count))
-                } finally out.close()
-              }
-            }
-        } finally {
-          tarIn.close()
-        }
-      }
-    }
-  }.unless(inputPath == null || outputPath == null)
+  def extractTarGz(inputPath: String, outputPath: String): ZIO[Any, IOException, Option[Unit]] =
+    common.DataUtilities.extractTarGz(inputPath, outputPath)
+      .mapError(e => new IOException(e.getMessage, e))
+      .when(inputPath != null && outputPath != null)

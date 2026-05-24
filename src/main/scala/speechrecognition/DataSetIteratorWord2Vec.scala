@@ -26,8 +26,8 @@ class DataSetIteratorWord2Vec(
 
   private val vectorSize = wordVectors.getWordVector(wordVectors.vocab().wordAtIndex(0)).length
   private var cursor = 0
-  private val positiveFiles = new File(FilenameUtils.concat(dataDirectory, s"aclImdb/${if (train) "train" else "test"}/pos/")).listFiles()
-  private val negativeFiles = new File(FilenameUtils.concat(dataDirectory, s"aclImdb/${if (train) "train" else "test"}/neg/")).listFiles()
+  private val positiveFiles = Option(new File(FilenameUtils.concat(dataDirectory, s"aclImdb/${if (train) "train" else "test"}/pos/")).listFiles()).getOrElse(Array.empty[File])
+  private val negativeFiles = Option(new File(FilenameUtils.concat(dataDirectory, s"aclImdb/${if (train) "train" else "test"}/neg/")).listFiles()).getOrElse(Array.empty[File])
 
   private val tokenizerFactory: TokenizerFactory = {
     val tf = new DefaultTokenizerFactory()
@@ -63,7 +63,7 @@ class DataSetIteratorWord2Vec(
       val tokens = tokenizerFactory.create(review).getTokens
       tokens.asScala.filter(wordVectors.hasWord)
     }
-    val maxLength = allTokens.map(_.size).max
+    val maxLength = if allTokens.isEmpty then 0 else allTokens.map(_.size).max
     val truncatedLength = math.min(maxLength, truncateLength)
 
     // Create DataSet

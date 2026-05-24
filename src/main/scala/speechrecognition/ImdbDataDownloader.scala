@@ -2,10 +2,6 @@ package speechrecognition
 package imdb
 
 import zio.*
-import zio.stream.*
-import sttp.client3.*
-import sttp.client3.httpclient.zio.HttpClientZioBackend
-import sttp.capabilities.zio.ZioStreams
 import java.io.{File, FileOutputStream}
 import java.net.URL
 import java.nio.file.{Files, Paths, StandardCopyOption}
@@ -41,20 +37,14 @@ object ImdbDataDownloader:
     } yield ()
   }
 
-  def downloadFile(url: String, targetPath: String): Task[Unit] = {
-    HttpClientZioBackend().flatMap { backend =>
-      val request = basicRequest
-        .get(uri"$url")
-        .response(asStreamUnsafe(ZioStreams))
-
-      request.send(backend).flatMap { response =>
-        response.body match {
-          case Right(stream) =>
-            stream.run(ZSink.fromFile(new File(targetPath))).unit
-          case Left(err) =>
-            ZIO.fail(new RuntimeException(s"Failed to download file: $err"))
-        }
-      }.ensuring(backend.close().orDie)
+  def downloadFile(url: String, targetPath: String): Task[Unit] = ZIO.attempt {
+    val connection = new URL(url).openConnection()
+    connection.setRequestProperty("User-Agent", "Mozilla/5.0")
+    val in = connection.getInputStream
+    try {
+      Files.copy(in, Paths.get(targetPath), StandardCopyOption.REPLACE_EXISTING)
+    } finally {
+      in.close()
     }
   }
 

@@ -11,7 +11,7 @@ import org.deeplearning4j.nn.api.OptimizationAlgorithm
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration
 import org.deeplearning4j.nn.conf.inputs.InputType
-import org.deeplearning4j.nn.conf.layers.{DenseLayer, OutputLayer}
+import org.deeplearning4j.nn.conf.layers.{DenseLayer, OutputLayer, DropoutLayer}
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.deeplearning4j.nn.weights.WeightInit
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener
@@ -36,7 +36,7 @@ object ImageProcessingUsingRNN extends ZIOAppDefault:
   private val randNumGen = Random(rngseed)
   private val batchSize = 128
   private val outputNum = 10
-  private val numEpochs = 1
+  private val numEpochs = 15
 
   override def run: ZIO[Any, Throwable, Unit] =
     (for {

@@ -1,8 +1,45 @@
-This project demostrate how to implement AI application with ZIO 2 and Deeplearning4j.
+This project demonstrates how to implement AI applications with ZIO 2 and Deeplearning4j.
 
-- [Human Speech Recognition Using Classification](#Human Speech Recognition Using Classification)
-- [ImageProcessingUsingRNN](#ImageProcessingUsingRNN)
-- [Natural Language Modeling Projects](#Natural Language Modeling Projects)
+- [Human Speech Recognition Using Classification](#human-speech-recognition-using-classification)
+- [ImageProcessingUsingRNN](#imageprocessingusingrnn)
+- [Natural Language Modeling Projects](#natural-language-modeling-projects)
+- [Project Structure](#project-structure)
+- [Common Utilities](#common-utilities)
+---
+
+## Project Structure
+
+```
+src/main/scala/
+├── speechrecognition/        # IMDB sentiment analysis with LSTM
+│   ├── HumanSpeechRecognitionUsingClassification.scala
+│   ├── DataSetIteratorWord2Vec.scala
+│   ├── DataUtilities.scala
+│   ├── ImdbDataDownloader.scala
+│   └── ZIODataSetService.scala
+├── imageprocessing/          # MNIST image classification
+│   ├── ImageProcessingUsingRNN.scala
+│   └── DataUtilities.scala
+├── nlp/                      # Natural language processing
+│   ├── NaturalLanguageModelingUsingRNN.scala
+│   └── NaturalLanguageModelingDL.scala
+├── classify/                 # Classification traits/utilities
+│   ├── ClassifyAndPredictTraitUsingDL.scala
+│   └── LineRecordReaderUserTrait.scala
+└── common/                   # Shared utilities
+    └── DataUtilities.scala   # tar.gz extraction, HTTP downloads, etc.
+```
+
+## Common Utilities
+
+Shared functionality lives in `common.DataUtilities` (aliased as `DataUtils`):
+
+- **`DataUtils.extractTarGz`** — downloads and extracts `.tar.gz` archives, used by both `speechrecognition` and `imageprocessing` modules
+- **`DataUtils.loadFile`** — downloads files via HTTP
+- **`DataUtils.deleteDirectory`** — recursive directory cleanup
+
+All modules use ZIO for effect management and DL4J/ND4J for neural network operations.
+
 ---
 
 # Human Speech Recognition Using Classification
@@ -142,23 +179,6 @@ This document provides an overview and guide for the ImageProcessingUsingRNN pro
 - Trains the model using stochastic gradient descent.
 - Evaluates and displays model performance.
 
-## Prerequisites
-
-- Java 8 or above
-- sbt (Scala Build Tool)
-
-## Getting Started
-
-1. Run the application:
-   ```bash
-   sbt run
-   ```
-   This performs:
-    - Data download and extraction
-    - Data preprocessing
-    - Model training
-    - Model evaluation
-
 ## Model Architecture
 
 The network architecture:
@@ -192,10 +212,10 @@ W^{[l]} = W^{[l]} - \eta \frac{\partial \mathcal{L}}{\partial W^{[l]}} \\
 b^{[l]} = b^{[l]} - \eta \frac{\partial \mathcal{L}}{\partial b^{[l]}}
 \]
 
-## Project Structure
+## Module Files
 
-- `ImageProcessingUsingRNN.scala`: Main logic.
-- `DataUtilities.scala`: Data download and extraction logic.
+- `ImageProcessingUsingRNN.scala`: Main training/evaluation logic.
+- `DataUtilities.scala`: Data download and extraction (delegates to `DataUtils.extractTarGz`).
 
 ## Model Training Flow
 

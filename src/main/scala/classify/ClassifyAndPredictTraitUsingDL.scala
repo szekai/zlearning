@@ -87,9 +87,14 @@ case class Classifier(filePath: String, labels: List[String]):
 
         // Initialize normalizer with training data
         _ <- ZIO.attempt {
-          val normalizer = trainIter.getPreProcessor.asInstanceOf[NormalizerStandardize]
-          normalizer.fit(trainIter)  // Calculate mean/std
-          trainIter.reset()
+          trainIter.getPreProcessor match
+            case normalizer: NormalizerStandardize =>
+              normalizer.fit(trainIter)  // Calculate mean/std
+              trainIter.reset()
+            case other =>
+              throw new IllegalStateException(
+                s"Expected NormalizerStandardize preprocessor but got: ${if other == null then "null" else other.getClass.getName}"
+              )
         }
 
         // Training output

@@ -6,7 +6,6 @@ lazy val root = (project in file("."))
   .settings(
     name := "zlearning",
     zioDeps,
-    sparkDeps,
     dl4jDeps,
     cudaDeps,
     testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework"),
@@ -14,26 +13,15 @@ lazy val root = (project in file("."))
   )
 
 lazy val zioDeps = libraryDependencies ++= Seq(
-  "dev.zio" %% "zio" % "2.1.17",
+  "dev.zio" %% "zio" % "2.1.26",
   "io.github.karimagnusson" %% "zio-path" % "2.0.1",
-  "dev.zio" %% "zio-test" % "2.1.17" % Test,
-  "dev.zio" %% "zio-streams" % "2.1.17",
-  "dev.zio" %% "zio-logging" % "2.5.0",
-  "dev.zio" %% "zio-logging-slf4j" % "2.5.0",
-  "dev.zio" %% "zio-http" % "3.2.0",
-  "com.softwaremill.sttp.client3" %% "httpclient-backend-zio" % "3.5.2",
-  "org.apache.commons" % "commons-compress" % "1.27.1"
+  "dev.zio" %% "zio-test" % "2.1.26" % Test,
+  "dev.zio" %% "zio-streams" % "2.1.26",
+  "dev.zio" %% "zio-logging" % "2.5.3",
+  "dev.zio" %% "zio-logging-slf4j" % "2.5.3",
+  "dev.zio" %% "zio-http" % "3.11.2",
+  "org.apache.commons" % "commons-compress" % "1.28.0"
 )
-
-val sparkVersion = "3.5.5"
-
-lazy val sparkDeps = libraryDependencies ++= Seq(
-  ("org.apache.spark" %% "spark-core" % sparkVersion),
-  ("org.apache.spark" %% "spark-sql" % sparkVersion),
-  ("org.apache.spark" %% "spark-streaming" % sparkVersion),
-  ("org.apache.spark" %% "spark-streaming-kafka-0-10" % sparkVersion),
-  ("org.apache.spark" %% "spark-sql-kafka-0-10" % sparkVersion)
-).map(_.cross(CrossVersion.for3Use2_13))
 
 val dl4j_version = "1.0.0-M2.1"
 // Deeplearning4j dependencies
@@ -48,5 +36,6 @@ lazy val cudaDeps = libraryDependencies ++= Seq(
   //  "org.nd4j" % "nd4j-cuda-10.0-platform" % "1.0.0-beta7",
   //  "org.nd4j" % "nd4j-cuda-9.2-platform" % "1.0.0-beta6",
   //  "org.nd4j" % "nd4j-cuda-10.1-platform" % "1.0.0-beta7",
+//    "org.nd4j" % "nd4j-cuda-11.4-platform" % "1.0.0-M2.1",
   "org.nd4j" % "nd4j-native-platform" % "1.0.0-M2.1"
 )

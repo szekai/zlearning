@@ -3,8 +3,6 @@ package imageprocessing
 import zio._
 import zio.http._
 import java.io._
-import org.apache.commons.compress.archivers.tar.{TarArchiveEntry, TarArchiveInputStream}
-import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import org.apache.commons.io.FilenameUtils
 
 object DataUtilities:
@@ -97,34 +95,5 @@ object DataUtilities:
   }
   
   // Extract the tar.gz file
-  def extractTarGz(inputPath: String, outputPathRaw: String): Task[Unit] =
-    val bufferSize = 4096
-    val outputPath = if (outputPathRaw.endsWith(File.separator)) outputPathRaw else outputPathRaw + File.separator
-
-    ZIO.attemptBlocking {
-      val tais = new TarArchiveInputStream(
-        new GzipCompressorInputStream(
-          new BufferedInputStream(new FileInputStream(inputPath))
-        )
-      )
-
-      try
-        var entry: TarArchiveEntry = tais.getNextEntry
-        while (entry != null) {
-          val outputFile = new File(outputPath + entry.getName)
-          if (entry.isDirectory) outputFile.mkdirs()
-          else
-            val buffer = new Array[Byte](bufferSize)
-            val fos = new FileOutputStream(outputFile)
-            val dest = new BufferedOutputStream(fos, bufferSize)
-            try
-              var count = tais.read(buffer, 0, bufferSize)
-              while (count != -1) {
-                dest.write(buffer, 0, count)
-                count = tais.read(buffer, 0, bufferSize)
-              }
-            finally dest.close()
-          entry = tais.getNextEntry
-        }
-      finally tais.close()
-    }
+  def extractTarGz(inputPath: String, outputPath: String): Task[Unit] =
+    common.DataUtilities.extractTarGz(inputPath, outputPath)
