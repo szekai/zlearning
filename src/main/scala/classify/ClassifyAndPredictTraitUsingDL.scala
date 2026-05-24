@@ -23,10 +23,29 @@ import org.nd4j.linalg.api.ndarray.INDArray
 import org.nd4j.linalg.dataset.api.preprocessor.NormalizerStandardize
 
 import java.io.{File, IOException}
+import java.net.URL
+import java.nio.file.{Files, Paths, StandardCopyOption}
+import java.util.jar.JarFile
+import scala.jdk.CollectionConverters.*
 
 object ClassifyAndPredictTraitUsingDL extends ZIOAppDefault:
 
   private val Labels = List("M", "F")
+
+  private def extractResourceDir(jarUrl: URL, prefix: String, targetDir: File): Unit =
+    val jarPath = jarUrl.getPath.substring(5, jarUrl.getPath.indexOf("!"))
+    val jar = new JarFile(jarPath)
+    try
+      jar.entries().asIterator.asScala.foreach { entry =>
+        val name = entry.getName
+        if name.startsWith(prefix) && !entry.isDirectory then
+          val dest = new File(targetDir, name.substring(prefix.length + 1))
+          dest.getParentFile.mkdirs()
+          val in = jar.getInputStream(entry)
+          try Files.copy(in, dest.toPath, StandardCopyOption.REPLACE_EXISTING)
+          finally in.close()
+      }
+    finally jar.close()
 
   def run =
     val program = for
@@ -36,9 +55,18 @@ object ClassifyAndPredictTraitUsingDL extends ZIOAppDefault:
             ZIO.fail(new IllegalArgumentException("Resource 'Data' not found on the classpath"))
           else ZIO.succeed(url)
         )
-      filePath = File(resourceUrl.toURI).getAbsolutePath
-      _ <- printLine(s"Data path: $filePath")
-      _ <- Classifier(filePath, Labels).startTraining()
+      dataPath <- ZIO.attemptBlocking {
+        val url = resourceUrl
+        if url.getProtocol == "jar" then
+          val tempDir = Files.createTempDirectory("zl-data").toFile
+          tempDir.deleteOnExit()
+          extractResourceDir(url, "Data", tempDir)
+          tempDir.getAbsolutePath
+        else
+          File(url.toURI).getAbsolutePath
+      }
+      _ <- printLine(s"Data path: $dataPath")
+      _ <- Classifier(dataPath, Labels).startTraining()
     yield ()
 
     program.catchAll(e => printLineError(s"Error: ${e.getMessage}"))

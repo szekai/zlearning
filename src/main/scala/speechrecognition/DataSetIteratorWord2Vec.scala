@@ -58,12 +58,13 @@ class DataSetIteratorWord2Vec(
       cursor += 1
     }
 
-    // Tokenize and filter
+    // Tokenize and filter - skip reviews with no recognized words
     val allTokens = reviews.map { review =>
       val tokens = tokenizerFactory.create(review).getTokens
       tokens.asScala.filter(wordVectors.hasWord)
     }
-    val maxLength = if allTokens.isEmpty then 0 else allTokens.map(_.size).max
+    val nonEmptyIndices = allTokens.zipWithIndex.collect { case (tokens, i) if tokens.nonEmpty => i }
+    val maxLength = if nonEmptyIndices.isEmpty then 0 else nonEmptyIndices.map(i => allTokens(i).size).max
     val truncatedLength = math.min(maxLength, truncateLength)
 
     // Create DataSet
@@ -72,7 +73,7 @@ class DataSetIteratorWord2Vec(
     val featuresMask = Nd4j.zeros(reviews.size, truncatedLength)
     val labelsMask = Nd4j.zeros(reviews.size, truncatedLength)
 
-    for (i <- reviews.indices) {
+    for (i <- nonEmptyIndices) {
       val tokens = allTokens(i)
       val seqLength = math.min(tokens.size, truncatedLength)
       val vectors = wordVectors.getWordVectors(tokens.take(seqLength).asJava).transpose()

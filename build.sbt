@@ -1,6 +1,6 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-ThisBuild / scalaVersion := "3.6.4"
+ThisBuild / scalaVersion := "3.8.3"
 
 lazy val root = (project in file("."))
   .settings(
@@ -16,11 +16,12 @@ lazy val zioDeps = libraryDependencies ++= Seq(
   "dev.zio" %% "zio" % "2.1.26",
   "io.github.karimagnusson" %% "zio-path" % "2.0.1",
   "dev.zio" %% "zio-test" % "2.1.26" % Test,
+  "dev.zio" %% "zio-test-sbt" % "2.1.26" % Test,
   "dev.zio" %% "zio-streams" % "2.1.26",
   "dev.zio" %% "zio-logging" % "2.5.3",
   "dev.zio" %% "zio-logging-slf4j" % "2.5.3",
-  "dev.zio" %% "zio-http" % "3.11.2",
-  "org.apache.commons" % "commons-compress" % "1.28.0"
+  "org.apache.commons" % "commons-compress" % "1.28.0",
+  "io.github.szekai" %% "zio-nn-djl" % "0.7.2"
 )
 
 val dl4j_version = "1.0.0-M2.1"

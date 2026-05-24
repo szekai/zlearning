@@ -12,20 +12,17 @@ import java.io.{File, IOException}
 import java.net.URI
 import java.nio.charset.Charset
 import java.nio.file.{Files, Paths}
-import scala.jdk.javaapi.CollectionConverters.*
-import org.apache.commons.lang3.StringUtils
 import scala.jdk.CollectionConverters.*
-
-import scala.jdk.javaapi.CollectionConverters
+import org.apache.commons.lang3.StringUtils
 
 class LineRecordReaderUserTrait(val labels: List[String]) extends LineRecordReader:
 
-  private var names: List[String] = Nil
-  private var possibleCharacters: String = ""
-  var maxLengthName: Int = 0
-  private var totalRecords: Int = 0
-  private var iter: Iterator[String] = Iterator.empty
-  private var initializationDone: Boolean = false
+  @volatile private var names: List[String] = Nil
+  @volatile private var possibleCharacters: String = ""
+  @volatile var maxLengthName: Int = 0
+  @volatile private var totalRecords: Int = 0
+  @volatile private var iter: Iterator[String] = Iterator.empty
+  @volatile private var initializationDone: Boolean = false
 
   def initializeZIO(split: InputSplit): ZIO[Scope, Throwable, Unit] =
     split match

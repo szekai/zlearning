@@ -2,7 +2,6 @@ import org.nd4j.common.util.ArrayUtil
 import org.nd4j.linalg.api.ndarray.INDArray
 import org.nd4j.linalg.factory.Nd4j
 import org.nd4j.linalg.ops.transforms.Transforms.*
-import zio.*
 import zio.test.*
 import zio.test.Assertion.*
 
@@ -15,61 +14,55 @@ object ND4JForFeatureVectorsSpec extends ZIOSpecDefault {
   override def spec: Spec[Any, Throwable] = suite("ND4JForFeatureVectorsSpec")(
 
     test("subtractVectors") {
-      val vectorAdd = SIX_BY_THREE_RANDOM.add(SIX_BY_THREE_ADD_TEN)
-      val vectorSubtract = SIX_BY_THREE_RANDOM.sub(SIX_BY_THREE_ADD_TEN)
-
-      for {
-        _ <- Console.printLine("Vector add:\n" + vectorAdd)
-        _ <- Console.printLine("Vector subtract:\n" + vectorSubtract)
-      } yield assertCompletes
+      val array = Nd4j.rand(6, 3)
+      val addTen = Nd4j.valueArrayOf(Array(6, 3), 10.0)
+      val afterAdd = array.add(addTen)
+      val afterSubtract = afterAdd.sub(addTen)
+      assertTrue(array.equalsWithEps(afterSubtract, 1e-6))
     },
 
     test("multiplyVectors") {
-      val vectorMultiply = SIX_BY_THREE_RANDOM.mul(SIX_BY_THREE_ADD_TEN)
-
-      for {
-        _ <- Console.printLine("Vector multiply:\n" + vectorMultiply)
-      } yield assertCompletes
+      val array = Nd4j.rand(6, 3)
+      val scale = Nd4j.valueArrayOf(Array(6, 3), 2.0)
+      val multiplied = array.mul(scale)
+      val divided = multiplied.div(scale)
+      assertTrue(array.equalsWithEps(divided, 1e-6))
     },
 
     test("divideVectors") {
-      val vectorDivide = SIX_BY_THREE_RANDOM.div(SIX_BY_THREE_ADD_TEN)
-
-      for {
-        _ <- Console.printLine("Vector divide:\n" + vectorDivide)
-      } yield assertCompletes
+      val array = Nd4j.rand(6, 3)
+      val divisor = Nd4j.valueArrayOf(Array(6, 3), 5.0)
+      val divided = array.div(divisor)
+      val restored = divided.mul(divisor)
+      assertTrue(array.equalsWithEps(restored, 1e-6))
     },
 
     test("compareVectors") {
-      val areArraysEquals1 = vectorEquals(SIX_BY_THREE_RANDOM, TWO_BY_THREE_ONES)
-      val areArraysEquals2 = vectorEquals(SIX_BY_THREE_RANDOM, SIX_BY_THREE_RANDOM)
-
-      for {
-        _ <- Console.printLine(s"Are arrays equals: 1. $areArraysEquals1, 2. $areArraysEquals2")
-      } yield assertTrue(!areArraysEquals1, areArraysEquals2)
+      val areArraysEquals1 = ArrayUtil.equals(
+        SIX_BY_THREE_RANDOM.data().asFloat(),
+        TWO_BY_THREE_ONES.data().asDouble()
+      )
+      val areArraysEquals2 = SIX_BY_THREE_RANDOM.equals(SIX_BY_THREE_RANDOM)
+      assertTrue(!areArraysEquals1, areArraysEquals2)
     },
 
     test("sqrtVectors") {
-      val sqrtResult = sqrt(SIX_BY_THREE_RANDOM)
-
-      for {
-        _ <- Console.printLine("Vector square root:\n" + sqrtResult)
-      } yield assertCompletes
+      val absValues = abs(SIX_BY_THREE_RANDOM)
+      val sqrtResult = sqrt(absValues)
+      val squared = sqrtResult.mul(sqrtResult)
+      assertTrue(absValues.equalsWithEps(squared, 1e-6))
     },
 
     test("ceilFloorAndRoundVectors") {
-      val ceilResult  = ceil(SIX_BY_THREE_RANDOM)
-      val floorResult = floor(SIX_BY_THREE_RANDOM)
-      val roundResult = round(SIX_BY_THREE_RANDOM)
-
-      for {
-        _ <- Console.printLine("Vector ceil:\n" + ceilResult)
-        _ <- Console.printLine("Vector floor:\n" + floorResult)
-        _ <- Console.printLine("Vector round:\n" + roundResult)
-      } yield assertCompletes
+      val values = Nd4j.rand(6, 3)
+      val ceilResult  = ceil(values)
+      val floorResult = floor(values)
+      val roundResult = round(values)
+      assertTrue(
+        ceilResult.shape().sameElements(values.shape()),
+        floorResult.shape().sameElements(values.shape()),
+        roundResult.shape().sameElements(values.shape())
+      )
     }
   )
-
-  private def vectorEquals(arr1: INDArray, arr2: INDArray): Boolean =
-    ArrayUtil.equals(arr1.data().asFloat(), arr2.data().asDouble())
 }

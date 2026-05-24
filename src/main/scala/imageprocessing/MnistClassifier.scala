@@ -24,9 +24,8 @@ import org.nd4j.linalg.lossfunctions.LossFunctions
 import java.io.File
 import java.util.Random
 import zio.*
-import zio.http.Client
 
-object ImageProcessingUsingRNN extends ZIOAppDefault:
+object MnistClassifier extends ZIOAppDefault:
 
   private val height = 28
   private val width = 28
@@ -80,7 +79,6 @@ object ImageProcessingUsingRNN extends ZIOAppDefault:
 
       _ <- Console.printLine(eval.stats())
     } yield ())
-      .provide(Client.default, Scope.default)
 
   private def validateModel(test: FileSplit,
                             recordReader: ImageRecordReader,
@@ -119,5 +117,4 @@ object ImageProcessingUsingRNN extends ZIOAppDefault:
     yield model
 
 
-  private def usingClient: Client with Scope => Client =
-    identity
+

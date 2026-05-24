@@ -1,9 +1,9 @@
 package imageprocessing
 
-import zio._
-import zio.http._
-import java.io._
 import org.apache.commons.io.FilenameUtils
+import zio.*
+
+import java.io.*
 
 object DataUtilities:
 
@@ -15,10 +15,9 @@ object DataUtilities:
     tmpDir <- ZIO.fromOption(tmpDirOpt).orElseFail(new Exception("Temporary directory not found"))
   } yield FilenameUtils.concat(tmpDir, "dl4j_Mnist/")
 
-  // The downloadData method now needs to use Scope because we are calling methods that require Scope
-  def downloadData: ZIO[Client with Scope, Throwable, Unit] =
+  def downloadData: Task[Unit] =
     for {
-      path          <- dataPath   // This uses System to get the tmpdir
+      path          <- dataPath
       directory     <- ZIO.attempt(new File(path))
       _             <- ZIO.attempt(directory.mkdirs()).when(!directory.exists())
       archivePath   = s"$path/mnist_png.tar.gz"
@@ -36,63 +35,19 @@ object DataUtilities:
     } yield ()
 
 
-  // Method to get MNIST PNG, this method interacts with I/O and needs Scope for cleanup
-  def getMnistPNG(path: String): ZIO[Client with Scope, Throwable, Unit] =
+  def getMnistPNG(path: String): Task[Unit] =
     val archivePath = s"$path/mnist_png.tar.gz"
     for {
       file <- ZIO.attempt(new File(archivePath))
       _    <- if (!file.exists()) then
-        downloadFile(DATA_URL, archivePath) *>
+        common.DataUtilities.loadFile(DATA_URL, archivePath) *>
           ZIO.logInfo(s"Data downloaded to $archivePath")
       else
         ZIO.logInfo(s"Using existing file at ${file.getAbsolutePath}")
     } yield ()
 
-
-  // Download method that requires Client and Scope (handles file download via Client)
-//  def downloadFile(remoteUrl: String, localPath: String): ZIO[Client with Scope, Throwable, Unit] =
-//    for {
-//      client <- ZIO.service[Client]  // Access the Client from the environment
-//      req    <- ZIO.fromEither(URL.decode(remoteUrl)).map(Request.get)
-//      res    <- client.request(req)
-//      body   <- res.body.asStream.runCollect
-//      _      <- ZIO.attemptBlocking {
-//        val file = new FileOutputStream(localPath)
-//        try file.write(body.toArray)
-//        finally file.close()
-//      }
-//    } yield ()
-
-  def downloadFile(remoteUrl: String, localPath: String, maxRedirects: Int = 5): ZIO[Client with Scope, Throwable, Unit] = {
-    def download(url: String, redirectsLeft: Int): ZIO[Client with Scope, Throwable, Unit] =
-      for {
-        client <- ZIO.service[Client]
-        req    <- ZIO.fromEither(URL.decode(url)).map(Request.get)
-        res    <- client.request(req)
-        _      <- if (res.status.isRedirection && redirectsLeft > 0) {
-          res.header(Header.Location) match {
-            case Some(location) =>
-              val newUrl = location.renderedValue  // <<<<<< fixed here!
-              download(newUrl, redirectsLeft - 1)
-            case None =>
-              ZIO.fail(new Exception("Redirected but no Location header"))
-          }
-        } else if (res.status.isSuccess) {
-          for {
-            body <- res.body.asStream.runCollect
-            _    <- ZIO.attemptBlocking {
-              val file = new FileOutputStream(localPath)
-              try file.write(body.toArray)
-              finally file.close()
-            }
-          } yield ()
-        } else {
-          ZIO.fail(new Exception(s"Unexpected status code: ${res.status}"))
-        }
-      } yield ()
-
-    download(remoteUrl, maxRedirects)
-  }
+  def downloadFile(remoteUrl: String, localPath: String): Task[Boolean] =
+    common.DataUtilities.loadFile(remoteUrl, localPath)
   
   // Extract the tar.gz file
   def extractTarGz(inputPath: String, outputPath: String): Task[Unit] =

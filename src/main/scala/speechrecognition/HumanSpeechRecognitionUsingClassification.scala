@@ -42,7 +42,7 @@ object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault {
 
     _ <- ImdbDataDownloader.downloadIMDBDatabase(imdbPath)
 
-    _ <- ZIO.succeed(Nd4j.getMemoryManager.setAutoGcWindow(10000))
+    _ <- ZIO.attempt(Nd4j.getMemoryManager.setAutoGcWindow(10000))
 
     net <- configureMultiLayerWithTwoOutputClasses()
 
@@ -64,7 +64,7 @@ object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault {
     for {
       reviewText <- ZIO.attempt(FileUtils.readFileToString(reviewFile, StandardCharsets.UTF_8))
       features <- zioDataSetService.featuresFromString(reviewText, MAX_NUMBER_OF_WORDS_TAKEN_FROM_REVIEW)
-      output <- ZIO.succeed(net.output(features))
+      output <- ZIO.attempt(net.output(features))
       tsLength = output.size(2)
       probs = output.get(NDArrayIndex.point(0), NDArrayIndex.all(), NDArrayIndex.point(tsLength - 1))
       _ <- Console.printLine(
@@ -91,13 +91,10 @@ object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault {
       _ <- ZIO.foreachDiscard(0 until N_EPOCHS) {
         epoch =>
           for {
-            _ <- ZIO.succeed(net.fit(train))
-            _ <- ZIO.succeed(train.reset())
+            _ <- ZIO.attempt(net.fit(train))
+            _ <- ZIO.attempt(train.reset())
             _ <- Console.printLine(s"Epoch $epoch complete. Starting evaluation:")
-            eval <- ZIO.succeed {
-              val evaluation: Evaluation = net.evaluate(test)
-              evaluation
-            }
+            eval <- ZIO.attempt[Evaluation](net.evaluate(test))
             _ <- Console.printLine(eval.stats())
           } yield ()
       }

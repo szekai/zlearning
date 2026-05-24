@@ -1,10 +1,35 @@
 This project demonstrates how to implement AI applications with ZIO 2 and Deeplearning4j.
 
+- [Running](#running)
 - [Human Speech Recognition Using Classification](#human-speech-recognition-using-classification)
-- [ImageProcessingUsingRNN](#imageprocessingusingrnn)
+- [MnistClassifier](#mnistclassifier)
 - [Natural Language Modeling Projects](#natural-language-modeling-projects)
 - [Project Structure](#project-structure)
 - [Common Utilities](#common-utilities)
+
+---
+
+## Running
+
+| Main Class | Command | Notes |
+|-----------|---------|-------|
+| `imageprocessing.MnistClassifier` | `sbt "runMain imageprocessing.MnistClassifier"` | MNIST 28×28 → 96.6% accuracy |
+| `nlp.NaturalLanguageModelingDL` | `sbt "runMain nlp.NaturalLanguageModelingDL"` | Word2Vec Skip-Gram (150-dim) |
+| `nlp.NaturalLanguageModelingUsingRNN` | `sbt "runMain nlp.NaturalLanguageModelingUsingRNN"` | Char-level LSTM (500 epochs) |
+| `classify.ClassifyAndPredictTraitUsingDL` | `sbt "runMain classify.ClassifyAndPredictTraitUsingDL"` | Name-to-gender classifier (needs `resources/Data/`) |
+| `speechrecognition.HumanSpeechRecognitionUsingClassification` | `sbt -J-Xmx6g -J-XX:+UseG1GC "runMain speechrecognition.HumanSpeechRecognitionUsingClassification"` | IMDB LSTM sentiment (needs 1.6GB GoogleNews vectors + 6GB heap) |
+
+### Tests
+```bash
+sbt test                            # 23 tests covering ZIO, ND4J, data extraction, network lifecycle
+```
+
+### IMDB Sentiment Setup
+The IMDB classifier needs the Google News word vectors:
+1. Download `GoogleNews-vectors-negative300.bin.gz` from [Google Code Archive](https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit)
+2. Update `GOOGLE_NEWS_VECTOR_PATH` in `HumanSpeechRecognitionUsingClassification.scala`
+3. The IMDB dataset downloads automatically on first run
+
 ---
 
 ## Project Structure
@@ -18,7 +43,7 @@ src/main/scala/
 │   ├── ImdbDataDownloader.scala
 │   └── ZIODataSetService.scala
 ├── imageprocessing/          # MNIST image classification
-│   ├── ImageProcessingUsingRNN.scala
+│   ├── MnistClassifier.scala
 │   └── DataUtilities.scala
 ├── nlp/                      # Natural language processing
 │   ├── NaturalLanguageModelingUsingRNN.scala
@@ -26,6 +51,13 @@ src/main/scala/
 ├── classify/                 # Classification traits/utilities
 │   ├── ClassifyAndPredictTraitUsingDL.scala
 │   └── LineRecordReaderUserTrait.scala
+├── wrapper/                  # ZIO-idiomatic DL4J wrappers
+│   └── pretrainedword2vec/
+│       ├── DataSetup.scala     # Custom error ADT + data download
+│       ├── NetworkConfig.scala # ZLayer-based network configuration
+│       ├── ReviewDataSet.scala # ZStream data loading
+│       ├── Trainer.scala       # ZIO.acquireRelease lifecycle
+│       └── Word2VecModel.scala # ZIO model loader
 └── common/                   # Shared utilities
     └── DataUtilities.scala   # tar.gz extraction, HTTP downloads, etc.
 ```
@@ -167,9 +199,9 @@ Input Review Text → [Word2Vec Embedding] → LSTM Layer → Softmax Layer
 
 ```
 ---
-# ImageProcessingUsingRNN
+# MnistClassifier
 
-This document provides an overview and guide for the ImageProcessingUsingRNN project. It demonstrates how to use a neural network to perform image classification on the MNIST dataset using ZIO for effect handling and DeepLearning4J (DL4J) for machine learning.
+This document provides an overview and guide for the MnistClassifier project. It demonstrates how to use a neural network to perform image classification on the MNIST dataset using ZIO for effect handling and DeepLearning4J (DL4J) for machine learning.
 
 ## Features
 
@@ -214,7 +246,7 @@ b^{[l]} = b^{[l]} - \eta \frac{\partial \mathcal{L}}{\partial b^{[l]}}
 
 ## Module Files
 
-- `ImageProcessingUsingRNN.scala`: Main training/evaluation logic.
+- `MnistClassifier.scala`: Main training/evaluation logic.
 - `DataUtilities.scala`: Data download and extraction (delegates to `DataUtils.extractTarGz`).
 
 ## Model Training Flow

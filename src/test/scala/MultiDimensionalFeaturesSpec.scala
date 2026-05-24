@@ -84,11 +84,11 @@ object MultiDimensionalFeaturesSpec extends ZIOSpecDefault {
 
       test("shouldCombineArrays") {
         for {
-          rowVector1 <- ZIO.succeed(Nd4j.create(Array(1.0, 2.0, 3.0)).reshape(1, 3))
-          rowVector2 <- ZIO.succeed(Nd4j.create(Array(4.0, 5.0, 6.0)).reshape(1, 3))
+          rowVector1 <- ZIO.attempt(Nd4j.create(Array(1.0, 2.0, 3.0)).reshape(1, 3))
+          rowVector2 <- ZIO.attempt(Nd4j.create(Array(4.0, 5.0, 6.0)).reshape(1, 3))
 
-          vStack     <- ZIO.succeed(Nd4j.vstack(rowVector1, rowVector2))
-          hStack     <- ZIO.succeed(Nd4j.hstack(rowVector1, rowVector2))
+          vStack     <- ZIO.attempt(Nd4j.vstack(rowVector1, rowVector2))
+          hStack     <- ZIO.attempt(Nd4j.hstack(rowVector1, rowVector2))
 
           _ <- Console.printLine("\n\n\nCreating INDArrays from other INDArrays, using hstack and vstack:")
           _ <- Console.printLine("vStack:\n" + vStack)
