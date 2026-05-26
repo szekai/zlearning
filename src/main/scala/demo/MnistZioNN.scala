@@ -10,8 +10,8 @@ import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.nd4j.linalg.indexing.NDArrayIndex
 import org.nd4j.linalg.dataset.api.preprocessor.ImagePreProcessingScaler
 import zio.*
-import zio.nn.*
-import zio.nn.dl4j.zioApi.{create, fitZ, predictZ}
+import zio.nn.dsl.*
+import zio.nn.dl4j.zioApi.*
 import java.io.File
 import java.util.Random
 
@@ -33,12 +33,12 @@ object MnistZioNN extends ZIOAppDefault:
       (testF, testL) <- loadMnistData(testDir)
       _ <- Console.printLine(s"Train: ${trainF.length}, Test: ${testF.length}")
 
-      arch <- ZIO.attempt {
-        ModelDef.Sequential(SequentialDef(inputSize, List(
-          LayerDef.Dense(inputSize, 100, ActivationFn.ReLU),
-          LayerDef.Output(100, numClasses, LossFn.MSE, ActivationFn.Softmax)
-        )))
-      }
+      arch <- ZIO.attempt(
+        Sequential(inputSize)(
+          Dense(100, ReLU),
+          Output(numClasses, MSE)
+        ).build
+      )
 
       _ <- Console.printLine(s"Architecture: $inputSize -> 100 -> $numClasses (zio-nn DSL)")
 
