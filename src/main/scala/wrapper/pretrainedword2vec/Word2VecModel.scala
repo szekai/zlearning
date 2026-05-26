@@ -1,19 +1,29 @@
 package wrapper.pretrainedword2vec
 
-import zio._
-import org.deeplearning4j.models.embeddings.loader.WordVectorSerializer
-import org.deeplearning4j.models.embeddings.wordvectors.WordVectors
-import java.io.File
+import zio.*
+import java.nio.file.Path
 
-case class Word2VecModel(vectors: WordVectors) extends AnyVal
+case class Word2VecModel(model: zio.nn.dl4j.embeddings.Word2VecModel)
 
-object Word2VecLoader {
+object Word2VecLoader:
+  def loadGoogleNewsVectors(path: String): ZIO[Any, Throwable, Word2VecModel] =
+    ZIO.fromTry(
+      zio.nn.dl4j.embeddings.Word2Vec.loadGoogleNewsVectors(Path.of(path))
+    ).map(Word2VecModel(_))
+
   def load(path: String): ZIO[Any, Throwable, Word2VecModel] =
-    ZIO.attemptBlocking {
-      Word2VecModel(
-        WordVectorSerializer.loadStaticModel(new File(path))
-      )
-    }.refineOrDie { case e: Exception =>
-      new RuntimeException(s"Failed to load Word2Vec model: ${e.getMessage}", e)
-    }
-}
+    ZIO.fromTry(
+      zio.nn.dl4j.embeddings.Word2Vec.load(Path.of(path))
+    ).map(Word2VecModel(_))
+
+  def loadGloVe(path: String): ZIO[Any, Throwable, Word2VecModel] =
+    ZIO.fail(new UnsupportedOperationException(
+      "GloVe vectors return raw DL4J WordVectors. Use DataSetup.loadWordVectorsRaw for GloVe."
+    ))
+
+extension (model: Word2VecModel)
+  def similarity(word1: String, word2: String): Task[Double] =
+    model.model.similarity(word1, word2)
+
+  def wordsNearest(word: String, n: Int): Task[List[String]] =
+    model.model.wordsNearest(word, n)

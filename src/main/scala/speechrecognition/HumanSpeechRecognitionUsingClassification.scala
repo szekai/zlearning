@@ -15,10 +15,12 @@ import org.nd4j.linalg.indexing.NDArrayIndex
 import org.nd4j.linalg.learning.config.Adam
 import org.nd4j.linalg.lossfunctions.LossFunctions
 import speechrecognition.imdb.ImdbDataDownloader
-import zio.{System, *}
+import zio.*
+import zio.nn.dl4j.embeddings.{Word2Vec, Word2VecModel}
 
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.nio.file.Path
 
 object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault {
 
@@ -44,9 +46,22 @@ object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault {
 
     _ <- ZIO.attempt(Nd4j.getMemoryManager.setAutoGcWindow(10000))
 
+    // zio-nn 0.8.0: similarity demo via new embedding API
+    w2v <- ZIO.fromTry(Word2Vec.loadGoogleNewsVectors(Path.of(GOOGLE_NEWS_VECTOR_PATH)))
+    _ <- Console.printLine("\n=== Word2Vec Similarity (zio-nn 0.8.0) ===")
+    dayNightSim <- w2v.similarity("day", "night")
+    _ <- Console.printLine(s"Similarity(day,night)=$dayNightSim")
+    goodBadSim <- w2v.similarity("good", "bad")
+    _ <- Console.printLine(s"Similarity(good,bad)=$goodBadSim")
+    nearestDay <- w2v.wordsNearest("day", 5)
+    _ <- Console.printLine(s"Nearest to 'day': ${nearestDay.mkString(", ")}")
+    _ <- Console.printLine("======================================\n")
+
+    // Training pipeline: uses raw DL4J WordVectors (no conversion path from Word2VecModel yet — issue #17)
+    wordVectors <- ZIO.attempt(WordVectorSerializer.loadStaticModel(new File(GOOGLE_NEWS_VECTOR_PATH)))
+
     net <- configureMultiLayerWithTwoOutputClasses()
 
-    wordVectors <- ZIO.attempt(WordVectorSerializer.loadStaticModel(new File(GOOGLE_NEWS_VECTOR_PATH)))
     train = new DataSetIteratorWord2Vec(imdbPath, wordVectors, BATCH_SIZE, MAX_NUMBER_OF_WORDS_TAKEN_FROM_REVIEW, true)
     test = new DataSetIteratorWord2Vec(imdbPath, wordVectors, BATCH_SIZE, MAX_NUMBER_OF_WORDS_TAKEN_FROM_REVIEW, false)
 
