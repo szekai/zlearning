@@ -21,8 +21,8 @@ lazy val zioDeps = libraryDependencies ++= Seq(
   "dev.zio" %% "zio-logging" % "2.5.3",
   "dev.zio" %% "zio-logging-slf4j" % "2.5.3",
   "org.apache.commons" % "commons-compress" % "1.28.0",
-  "io.github.szekai" %% "zio-nn-dl4j" % "0.8.0",
-  "io.github.szekai" %% "zio-nn-dl4j-embeddings" % "0.8.0"
+  "io.github.szekai" %% "zio-nn-dl4j" % "0.8.2",
+  "io.github.szekai" %% "zio-nn-dl4j-embeddings" % "0.8.2"
 )
 
 val dl4j_version = "1.0.0-M2.1"
