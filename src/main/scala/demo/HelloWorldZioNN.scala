@@ -2,7 +2,7 @@ package demo
 
 import zio.*
 import zio.nn.dsl.*
-import zio.nn.dl4j.zioApi.*
+import zio.nn.djl.zioApi.*
 
 object HelloWorldZioNN extends ZIOAppDefault:
 

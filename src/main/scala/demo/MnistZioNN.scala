@@ -11,7 +11,7 @@ import org.nd4j.linalg.indexing.NDArrayIndex
 import org.nd4j.linalg.dataset.api.preprocessor.ImagePreProcessingScaler
 import zio.*
 import zio.nn.dsl.*
-import zio.nn.dl4j.zioApi.*
+import zio.nn.djl.zioApi.*
 import java.io.File
 import java.util.Random
 
