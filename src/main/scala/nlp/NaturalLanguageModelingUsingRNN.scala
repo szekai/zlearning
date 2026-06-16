@@ -2,17 +2,11 @@ package nlp
 
 import zio._
 import zio.Console._
-import org.deeplearning4j.nn.conf.NeuralNetConfiguration
-import org.deeplearning4j.nn.conf.layers.{LSTM, RnnOutputLayer}
-import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
-import org.deeplearning4j.nn.weights.WeightInit
-import org.deeplearning4j.optimize.listeners.ScoreIterationListener
-import org.nd4j.linalg.activations.Activation
+import zio.nn.dl4j.zioApi.*
+import zio.nn.dsl.{Sequential, LSTM, Dense, Output, Softmax, Tanh, CategoricalCrossEntropy}
+import zio.nn.OptimizerDef
 import org.nd4j.linalg.api.ndarray.INDArray
-import org.nd4j.linalg.dataset.DataSet
 import org.nd4j.linalg.factory.Nd4j
-import org.nd4j.linalg.learning.config.RmsProp
-import org.nd4j.linalg.lossfunctions.LossFunctions.LossFunction
 
 import scala.collection.mutable
 
@@ -20,28 +14,35 @@ object NaturalLanguageModelingUsingRNN extends ZIOAppDefault:
 
   private val LEARN_STRING: Array[Char] = "* he cleaning agent cleans the mailbox.".toCharArray
   private val HIDDEN_LAYER_WIDTH = 50
-  private val HIDDEN_LAYER_CONT = 2
 
   def run =
-    val program = for
-      (learnStringChars, learnStringCharsList) <- createListOfPossibleCharacters()
-      builder <- parametrizeNeuralNetwork()
-      listBuilder <- ZIO.attempt(builder.list())
-      _ <- buildRNN(learnStringChars, listBuilder)
-      outputLayerBuilder <- normalizeOutputOfNeurons(learnStringChars)
-      _ <- ZIO.attempt(listBuilder.layer(HIDDEN_LAYER_CONT, outputLayerBuilder.build()))
-      net <- initializeNetwork(listBuilder)
-      trainingData <- createTrainingData(learnStringCharsList)
-      _ <- ZIO.foreachDiscard(0 until 500)(processEpoch(_, net, trainingData, learnStringCharsList))
-    yield ()
+    val program = ZIO.scoped {
+      for
+        charList <- createListOfPossibleCharacters()
+        vocabSize = charList.size
+        _ <- printLine(s"Characters: ${charList.mkString(" ")}")
 
+        arch = Sequential(vocabSize)(
+          LSTM(HIDDEN_LAYER_WIDTH, Tanh),
+          LSTM(HIDDEN_LAYER_WIDTH, Tanh),
+          Output(vocabSize, CategoricalCrossEntropy(1e-15), Softmax)
+        ).withOptimizer(OptimizerDef.RMSprop(0.001)).withSeed(123).build
+
+        model <- create(arch)
+
+        trainingData <- createTrainingData(charList)
+        _ <- ZIO.foreachDiscard(0 until 500) { epoch =>
+          processEpoch(epoch, model, trainingData, charList)
+        }
+      yield ()
+    }
     program.catchAll(e => printLineError(s"Error: ${e.getMessage}"))
 
   private def safePutScalar(
-                             array: INDArray,
-                             indices: Array[Int],
-                             value: Double
-                           ): ZIO[Any, Throwable, Unit] =
+    array: INDArray,
+    indices: Array[Int],
+    value: Double
+  ): ZIO[Any, Throwable, Unit] =
     ZIO.attempt {
       if indices.length != array.rank() then
         throw new IllegalArgumentException(
@@ -51,9 +52,9 @@ object NaturalLanguageModelingUsingRNN extends ZIOAppDefault:
     }
 
   private def safeCharIndex(
-                             charList: mutable.Buffer[Char],
-                             char: Char
-                           ): ZIO[Any, Throwable, Int] =
+    charList: mutable.Buffer[Char],
+    char: Char
+  ): ZIO[Any, Throwable, Int] =
     ZIO.attempt {
       val index = charList.indexOf(char)
       if index == -1 then
@@ -62,41 +63,41 @@ object NaturalLanguageModelingUsingRNN extends ZIOAppDefault:
     }
 
   private def processEpoch(
-                            epoch: Int,
-                            net: MultiLayerNetwork,
-                            trainingData: DataSet,
-                            charList: mutable.Buffer[Char]
-                          ): ZIO[Any, Throwable, Unit] =
+    epoch: Int,
+    model: zio.nn.dl4j.ZModel,
+    trainingData: org.nd4j.linalg.dataset.DataSet,
+    charList: mutable.Buffer[Char]
+  ): ZIO[Any, Throwable, Unit] =
     for
       _ <- printLine(s"Epoch $epoch")
-      _ <- ZIO.attemptBlocking(net.fit(trainingData))
-      _ <- ZIO.attempt(net.rnnClearPreviousState())
+      _ <- ZIO.attemptBlocking(model.underlying.fit(trainingData))
+      _ <- ZIO.attempt(model.underlying.rnnClearPreviousState())
       testInit <- ZIO.attempt(Nd4j.zeros(1, charList.size, 1))
       initialChar <- safeCharIndex(charList, LEARN_STRING(0))
       _ <- safePutScalar(testInit, Array(0, initialChar, 0), 1)
-      initialOutput <- predictWhatShouldBeNext(net, testInit)
-      _ <- predictAndPrintSequence(net, initialOutput, charList)
+      initialOutput <- ZIO.attempt(model.underlying.rnnTimeStep(testInit))
+      _ <- predictAndPrintSequence(model, initialOutput, charList)
       _ <- printLine("")
     yield ()
 
   private def predictAndPrintSequence(
-                                       net: MultiLayerNetwork,
-                                       initialOutput: INDArray,
-                                       charList: mutable.Buffer[Char]
-                                     ): ZIO[Any, Throwable, Unit] =
+    model: zio.nn.dl4j.ZModel,
+    initialOutput: INDArray,
+    charList: mutable.Buffer[Char]
+  ): ZIO[Any, Throwable, Unit] =
     ZIO.foldLeft(LEARN_STRING.indices)(initialOutput) { (currentOutput, _) =>
       for
         sampledIdx <- getHighestScoreNeuron(currentOutput)
         _ <- print(charList(sampledIdx).toString)
         nextInput <- createNextInput(sampledIdx, charList.size)
-        nextOutput <- predictWhatShouldBeNext(net, nextInput)
+        nextOutput <- ZIO.attempt(model.underlying.rnnTimeStep(nextInput))
       yield nextOutput
     }.unit
 
   private def createNextInput(
-                               sampledCharacterIdx: Int,
-                               vocabSize: Int
-                             ): ZIO[Any, Throwable, INDArray] =
+    sampledCharacterIdx: Int,
+    vocabSize: Int
+  ): ZIO[Any, Throwable, INDArray] =
     for
       nextInput <- ZIO.attempt(Nd4j.zeros(1, vocabSize, 1))
       _ <- safePutScalar(nextInput, Array(0, sampledCharacterIdx, 0), 1)
@@ -105,19 +106,14 @@ object NaturalLanguageModelingUsingRNN extends ZIOAppDefault:
   private def getHighestScoreNeuron(output: INDArray): ZIO[Any, Throwable, Int] =
     ZIO.attempt(Nd4j.argMax(output, 1).getInt(0))
 
-  private def predictWhatShouldBeNext(net: MultiLayerNetwork, input: INDArray): ZIO[Any, Throwable, INDArray] =
-    ZIO.attempt(net.rnnTimeStep(input))
-
-  private def createListOfPossibleCharacters(): ZIO[Any, Throwable, (mutable.LinkedHashSet[Char], mutable.Buffer[Char])] =
+  private def createListOfPossibleCharacters(): ZIO[Any, Throwable, mutable.Buffer[Char]] =
     ZIO.attempt {
-      val charSet = mutable.LinkedHashSet.from(LEARN_STRING)
-      val charList = mutable.Buffer.from(charSet)
-      (charSet, charList)
+      mutable.Buffer.from(mutable.LinkedHashSet.from(LEARN_STRING))
     }
 
   private def createTrainingData(
-                                  charList: mutable.Buffer[Char]
-                                ): ZIO[Any, Throwable, DataSet] =
+    charList: mutable.Buffer[Char]
+  ): ZIO[Any, Throwable, org.nd4j.linalg.dataset.DataSet] =
     for {
       input <- ZIO.attempt(Nd4j.zeros(1, charList.size, LEARN_STRING.length))
       labels <- ZIO.attempt(Nd4j.zeros(1, charList.size, LEARN_STRING.length))
@@ -131,52 +127,4 @@ object NaturalLanguageModelingUsingRNN extends ZIOAppDefault:
           _ <- safePutScalar(labels, Array(0, nextIndex, i), 1)
         } yield ()
       }
-    } yield new DataSet(input, labels)
-
-  private def initializeNetwork(listBuilder: NeuralNetConfiguration.ListBuilder): ZIO[Any, Throwable, MultiLayerNetwork] =
-    ZIO.attempt {
-      val conf = listBuilder.build()
-      val net = new MultiLayerNetwork(conf)
-      net.init()
-      net.setListeners(new ScoreIterationListener(1))
-      net
-    }
-
-  private def normalizeOutputOfNeurons(
-                                        learnStringChars: mutable.LinkedHashSet[Char]
-                                      ): ZIO[Any, Throwable, RnnOutputLayer.Builder] =
-    ZIO.attempt {
-      val outputLayerBuilder = new RnnOutputLayer.Builder(LossFunction.MCXENT)
-      outputLayerBuilder.activation(Activation.SOFTMAX)
-      outputLayerBuilder.nIn(HIDDEN_LAYER_WIDTH)
-      outputLayerBuilder.nOut(learnStringChars.size)
-      outputLayerBuilder
-    }
-
-  private def buildRNN(
-                        learnStringChars: mutable.LinkedHashSet[Char],
-                        listBuilder: NeuralNetConfiguration.ListBuilder
-                      ): ZIO[Any, Throwable, Unit] =
-    for
-      _ <- printLine(s"Characters: ${learnStringChars.mkString(" ")}")
-      _ <- ZIO.foreachDiscard(0 until HIDDEN_LAYER_CONT) {
-        i =>
-          ZIO.attempt {
-            val hiddenLayerBuilder = new LSTM.Builder()
-              .nIn(if i == 0 then learnStringChars.size else HIDDEN_LAYER_WIDTH)
-              .nOut(HIDDEN_LAYER_WIDTH)
-              .activation(Activation.TANH)
-            listBuilder.layer(i, hiddenLayerBuilder.build())
-          }
-      }
-    yield ()
-
-  private def parametrizeNeuralNetwork(): ZIO[Any, Throwable, NeuralNetConfiguration.Builder] =
-    ZIO.attempt {
-      new NeuralNetConfiguration.Builder()
-        .seed(123)
-        .biasInit(0)
-        .miniBatch(false)
-        .updater(new RmsProp(0.001))
-        .weightInit(WeightInit.XAVIER)
-    }
+    } yield new org.nd4j.linalg.dataset.DataSet(input, labels)

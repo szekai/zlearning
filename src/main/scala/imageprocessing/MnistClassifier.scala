@@ -1,120 +1,75 @@
 package imageprocessing
 
-import org.apache.commons.io.FilenameUtils
-import org.datavec.api.io.labels.ParentPathLabelGenerator
-import org.datavec.api.split.FileSplit
-import org.datavec.image.loader.NativeImageLoader
-import org.datavec.image.recordreader.ImageRecordReader
-import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator
-import org.nd4j.evaluation.classification.Evaluation
-import org.deeplearning4j.nn.api.OptimizationAlgorithm
-import org.deeplearning4j.nn.conf.MultiLayerConfiguration
-import org.deeplearning4j.nn.conf.NeuralNetConfiguration
-import org.deeplearning4j.nn.conf.inputs.InputType
-import org.deeplearning4j.nn.conf.layers.{DenseLayer, OutputLayer, DropoutLayer}
-import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
-import org.deeplearning4j.nn.weights.WeightInit
-import org.deeplearning4j.optimize.listeners.ScoreIterationListener
-import org.nd4j.linalg.activations.Activation
-import org.nd4j.linalg.dataset.api.iterator.DataSetIterator
-import org.nd4j.linalg.dataset.api.preprocessor.{DataNormalization, ImagePreProcessingScaler}
-import org.nd4j.linalg.learning.config.Nesterovs
-import org.nd4j.linalg.lossfunctions.LossFunctions
-
 import java.io.File
-import java.util.Random
+import javax.imageio.ImageIO
+import scala.collection.mutable.ArrayBuffer
 import zio.*
+import zio.Console.*
+import zio.nn.dl4j.zioApi.*
+import zio.nn.dsl.{Sequential, Dense, ReLU, Output, Dropout, CategoricalCrossEntropy, SGD}
 
 object MnistClassifier extends ZIOAppDefault:
 
   private val height = 28
   private val width = 28
-  private val channels = 1
-
-  private val rngseed = 123
-  private val randNumGen = Random(rngseed)
-  private val batchSize = 128
   private val outputNum = 10
   private val numEpochs = 15
 
   override def run: ZIO[Any, Throwable, Unit] =
-    (for {
-      path <- DataUtilities.dataPath
-      _ <- DataUtilities.downloadData
+    ZIO.scoped {
+      for {
+        path <- DataUtilities.dataPath
+        _ <- DataUtilities.downloadData
 
-      trainData = File(s"$path/mnist_png/training")
-      testData = File(s"$path/mnist_png/testing")
+        trainDir = File(s"$path/mnist_png/training")
+        testDir = File(s"$path/mnist_png/testing")
 
-      train = FileSplit(trainData, NativeImageLoader.ALLOWED_FORMATS, randNumGen)
-      test = FileSplit(testData, NativeImageLoader.ALLOWED_FORMATS, randNumGen)
+        _ <- printLine("Loading training data...")
+        (trainImages, trainLabels) <- loadImages(trainDir)
+        _ <- printLine(s"Loaded ${trainImages.length} training samples")
 
-      labelMaker = ParentPathLabelGenerator()
-      recordReader = ImageRecordReader(height, width, channels, labelMaker)
-      _ <- ZIO.attempt(recordReader.initialize(train))
+        _ <- printLine("Loading test data...")
+        (testImages, testLabels) <- loadImages(testDir)
+        _ <- printLine(s"Loaded ${testImages.length} test samples")
 
-      dataIter = RecordReaderDataSetIterator(recordReader, batchSize, 1, outputNum)
-      scaler = ImagePreProcessingScaler(0, 1)
-      _ <- ZIO.attempt(scaler.fit(dataIter))
-      _ = dataIter.setPreProcessor(scaler)
+        _ <- printLine("BUILD MODEL")
+        arch = Sequential(height * width)(
+          Dense(100, ReLU),
+          Output(outputNum, CategoricalCrossEntropy(1e-15))
+        ).withOptimizer(SGD(0.006)).withSeed(123).build
 
-      model <- buildNeuralNetwork()
-      _ = model.setListeners(ScoreIterationListener(10))
+        model <- create(arch)
 
-      _ <- Console.printLine("TRAIN MODEL")
-      _ <- ZIO.foreachDiscard(0 until numEpochs)(_ => ZIO.attempt(model.fit(dataIter)))
+        _ <- printLine("TRAIN MODEL")
+        result <- model.fitZ(trainImages, trainLabels, numEpochs, 0.006f)
+        _ <- printLine(s"Training complete, final loss: ${result.loss}")
 
-      _ <- Console.printLine("EVALUATE MODEL")
-      _ <- ZIO.attempt(recordReader.reset())
+        _ <- printLine("EVALUATE MODEL")
+        preds <- model.predictZ(testImages)
+        accuracy = preds.indices.count(i => preds(i).round == testLabels(i)).toDouble / testLabels.length
+        _ <- printLine(f"Accuracy: $accuracy%.4f (${accuracy * 100}%.2f%%)")
+      } yield ()
+    }
 
-      testIter <- ZIO.attempt(validateModel(test, recordReader, scaler))
-      _ <- Console.printLine(recordReader.getLabels.toString)
-
-      eval = Evaluation(outputNum)
-      _ <- ZIO.attempt {
-        while testIter.hasNext do
-          val next = testIter.next()
-          val output = model.output(next.getFeatures)
-          eval.eval(next.getLabels, output)
+  private def loadImages(dir: File): Task[(Array[Array[Float]], Array[Int])] =
+    ZIO.attemptBlocking {
+      val images = ArrayBuffer[Array[Float]]()
+      val labels = ArrayBuffer[Int]()
+      for (labelDir <- dir.listFiles().filter(_.isDirectory).sortBy(_.getName.toInt)) {
+        val label = labelDir.getName.toInt
+        for (file <- labelDir.listFiles().filter(_.getName.endsWith(".png"))) {
+          val img = ImageIO.read(file)
+          val pixels = new Array[Float](height * width)
+          var y = 0
+          while y < height do
+            var x = 0
+            while x < width do
+              pixels(y * width + x) = (img.getRGB(x, y) & 0xFF) / 255.0f
+              x += 1
+            y += 1
+          images += pixels
+          labels += label
+        }
       }
-
-      _ <- Console.printLine(eval.stats())
-    } yield ())
-
-  private def validateModel(test: FileSplit,
-                            recordReader: ImageRecordReader,
-                            scaler: DataNormalization): DataSetIterator =
-    recordReader.initialize(test)
-    val testIter = RecordReaderDataSetIterator(recordReader, batchSize, 1, outputNum)
-    scaler.fit(testIter)
-    testIter.setPreProcessor(scaler)
-    testIter
-
-  private def buildNeuralNetwork(): ZIO[Any, Throwable, MultiLayerNetwork] =
-    for
-      _ <- Console.printLine("BUILD MODEL")
-      conf = NeuralNetConfiguration.Builder()
-        .seed(rngseed)
-        .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-        .updater(Nesterovs(0.006, 0.9))
-        .l2(1e-4)
-        .list()
-        .layer(0, DenseLayer.Builder()
-          .nIn(height * width)
-          .nOut(100)
-          .activation(Activation.RELU)
-          .weightInit(WeightInit.XAVIER)
-          .build())
-        .layer(1, OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
-          .nIn(100)
-          .nOut(outputNum)
-          .activation(Activation.SOFTMAX)
-          .weightInit(WeightInit.XAVIER)
-          .build())
-        .setInputType(InputType.convolutional(height, width, channels))
-        .build()
-      model = MultiLayerNetwork(conf)
-      _ = model.init()
-    yield model
-
-
-
+      (images.toArray, labels.toArray)
+    }
