@@ -13,7 +13,7 @@ import org.deeplearning4j.ui.model.stats.StatsListener
 import org.deeplearning4j.ui.model.storage.InMemoryStatsStorage
 import org.nd4j.linalg.dataset.api.preprocessor.NormalizerStandardize
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator
-import org.nd4j.evaluation.classification.Evaluation
+
 
 import java.io.{File, IOException}
 import java.net.URL
@@ -176,7 +176,7 @@ case class Classifier(filePath: String, labels: List[String]):
     model: zio.nn.dl4j.ZModel
   ): ZIO[Any, Throwable, Unit] =
     ZIO.foreachDiscard(1 to nEpochs) { epoch =>
-      ZIO.attemptBlocking(model.underlying.fit(trainIter)) *> printLine(s"Completed epoch $epoch/$nEpochs")
+      model.fitZ(trainIter, 1) *> printLine(s"Completed epoch $epoch/$nEpochs")
     }
 
   private def performCrossValidation(
@@ -185,6 +185,6 @@ case class Classifier(filePath: String, labels: List[String]):
   ): ZIO[Any, Throwable, Unit] =
     for
       _ <- printLine("Evaluating model...")
-      eval <- ZIO.attemptBlocking(model.underlying.evaluate(testIter): Evaluation)
-      _ <- printLine(eval.stats())
+      metrics <- model.evaluateIteratorZ(testIter, List(EvalMetric.Accuracy, EvalMetric.Precision, EvalMetric.Recall, EvalMetric.F1))
+      _ <- printLine(s"Accuracy: ${metrics("accuracy")}, Precision: ${metrics("precision")}, Recall: ${metrics("recall")}, F1: ${metrics("f1")}")
     yield ()
