@@ -2,7 +2,6 @@ package speechrecognition
 
 import org.apache.commons.io.{FileUtils, FilenameUtils}
 import org.deeplearning4j.models.embeddings.loader.WordVectorSerializer
-import org.nd4j.evaluation.classification.Evaluation
 import org.nd4j.linalg.api.ndarray.INDArray
 import org.nd4j.linalg.factory.Nd4j
 import org.nd4j.linalg.indexing.NDArrayIndex
@@ -80,7 +79,7 @@ object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault:
     for {
       reviewText <- ZIO.attempt(FileUtils.readFileToString(reviewFile, StandardCharsets.UTF_8))
       features <- zioDataSetService.featuresFromString(reviewText, MAX_NUMBER_OF_WORDS_TAKEN_FROM_REVIEW)
-      output <- ZIO.attempt(model.underlying.output(features))
+      output <- model.predictRaw(features)
       tsLength = output.size(2)
       probs = output.get(NDArrayIndex.point(0), NDArrayIndex.all(), NDArrayIndex.point(tsLength - 1))
       _ <- Console.printLine(
@@ -106,11 +105,12 @@ object HumanSpeechRecognitionUsingClassification extends ZIOAppDefault:
       _ <- ZIO.foreachDiscard(0 until N_EPOCHS) {
         epoch =>
           for {
-            _ <- ZIO.attemptBlocking(model.underlying.fit(train))
-            _ <- ZIO.attempt(train.reset())
+            _ <- model.fitZ(train, 1)
             _ <- Console.printLine(s"Epoch $epoch complete. Starting evaluation:")
-            eval <- ZIO.attemptBlocking(model.underlying.evaluate(test): Evaluation)
-            _ <- Console.printLine(eval.stats())
+            metrics <- model.evaluateIteratorZ(test, List(EvalMetric.Accuracy, EvalMetric.Precision, EvalMetric.Recall, EvalMetric.F1))
+            _ <- Console.printLine(
+              s"Accuracy: ${metrics("accuracy")}, Precision: ${metrics("precision")}, Recall: ${metrics("recall")}, F1: ${metrics("f1")}"
+            )
           } yield ()
       }
     } yield ()

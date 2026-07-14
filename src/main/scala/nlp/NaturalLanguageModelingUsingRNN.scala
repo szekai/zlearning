@@ -71,11 +71,11 @@ object NaturalLanguageModelingUsingRNN extends ZIOAppDefault:
     for
       _ <- printLine(s"Epoch $epoch")
       _ <- ZIO.attemptBlocking(model.underlying.fit(trainingData))
-      _ <- ZIO.attempt(model.underlying.rnnClearPreviousState())
+      _ <- model.rnnClearPreviousStateZ
       testInit <- ZIO.attempt(Nd4j.zeros(1, charList.size, 1))
       initialChar <- safeCharIndex(charList, LEARN_STRING(0))
       _ <- safePutScalar(testInit, Array(0, initialChar, 0), 1)
-      initialOutput <- ZIO.attempt(model.underlying.rnnTimeStep(testInit))
+      initialOutput <- model.rnnTimeStepZ(testInit)
       _ <- predictAndPrintSequence(model, initialOutput, charList)
       _ <- printLine("")
     yield ()
@@ -90,7 +90,7 @@ object NaturalLanguageModelingUsingRNN extends ZIOAppDefault:
         sampledIdx <- getHighestScoreNeuron(currentOutput)
         _ <- print(charList(sampledIdx).toString)
         nextInput <- createNextInput(sampledIdx, charList.size)
-        nextOutput <- ZIO.attempt(model.underlying.rnnTimeStep(nextInput))
+        nextOutput <- model.rnnTimeStepZ(nextInput)
       yield nextOutput
     }.unit
 

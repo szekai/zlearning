@@ -45,8 +45,8 @@ object MnistClassifier extends ZIOAppDefault:
         _ <- printLine(s"Training complete, final loss: ${result.loss}")
 
         _ <- printLine("EVALUATE MODEL")
-        preds <- model.predictZ(testImages)
-        accuracy = preds.indices.count(i => preds(i).round == testLabels(i)).toDouble / testLabels.length
+        metrics <- model.evaluateZ(testImages, testLabels, List(EvalMetric.Accuracy))
+        accuracy = metrics("accuracy")
         _ <- printLine(f"Accuracy: $accuracy%.4f (${accuracy * 100}%.2f%%)")
       } yield ()
     }

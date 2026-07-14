@@ -2,7 +2,14 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalaVersion := "3.8.3"
 
+lazy val zioNnRoot = file("/Users/szekai/Projects/scala/zio-nn")
+
 lazy val root = (project in file("."))
+  .dependsOn(
+    ProjectRef(zioNnRoot, "dl4j"),
+    ProjectRef(zioNnRoot, "embeddings"),
+    ProjectRef(zioNnRoot, "djl")
+  )
   .settings(
     name := "zlearning",
     zioDeps,
@@ -20,10 +27,7 @@ lazy val zioDeps = libraryDependencies ++= Seq(
   "dev.zio" %% "zio-streams" % "2.1.26",
   "dev.zio" %% "zio-logging" % "2.5.3",
   "dev.zio" %% "zio-logging-slf4j" % "2.5.3",
-  "org.apache.commons" % "commons-compress" % "1.28.0",
-  "io.github.szekai" %% "zio-nn-dl4j" % "0.9.1-SNAPSHOT",
-  "io.github.szekai" %% "zio-nn-dl4j-embeddings" % "0.9.1-SNAPSHOT",
-  "io.github.szekai" %% "zio-nn-djl" % "0.9.1-SNAPSHOT"
+  "org.apache.commons" % "commons-compress" % "1.28.0"
 )
 
 val dl4j_version = "1.0.0-M2.1"
